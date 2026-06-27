@@ -206,6 +206,8 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "732507396989",
   appId: "1:732507396989:web:710daa90a55e59ea020a14"
 };
+// スタッフ共通ログイン用の固定メール（秘密ではありません。秘密は「パスワード」のみ）
+const STAFF_EMAIL = "staff@logsauna.app";
 
 /* ---------------- 点検項目データ ---------------- */
 const CHECKS = {
@@ -306,7 +308,7 @@ async function bootStore(){
   }
   // 2) Firebase（GitHub本番）
   if (FIREBASE_CONFIG.projectId){
-    try{ await loadFirebase(); MODE="firebase"; DB=firebaseAdapter(); return; }
+    try{ await loadFirebase(); await ensureAuth(); MODE="firebase"; DB=firebaseAdapter(); return; }
     catch(e){ console.warn("Firebase初期化失敗→ローカルにフォールバック", e); }
   }
   // 3) localStorage（設定前のローカル確認）
@@ -357,9 +359,64 @@ function loadFirebase(){
     const add=(src)=>new Promise((ok,ng)=>{const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=ng;document.head.appendChild(s);});
     add("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js")
       .then(()=>add("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"))
+      .then(()=>add("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"))
       .then(()=>{ firebase.initializeApp(FIREBASE_CONFIG); res(); }).catch(rej);
   });
 }
+/* --- ログイン認証ゲート（スタッフ共通パスワード制） --- */
+function ensureAuth(){
+  const auth=firebase.auth();
+  return new Promise((resolve)=>{
+    let shown=false;
+    auth.onAuthStateChanged((u)=>{
+      if(u){ removeLogin(); addLogoutFab(); resolve(); }
+      else if(!shown){ shown=true; showLogin(auth); }
+    });
+  });
+}
+function addLogoutFab(){
+  if(document.getElementById("logoutFab")) return;
+  const b=document.createElement("button");
+  b.id="logoutFab"; b.textContent="ログアウト";
+  b.style.cssText="position:fixed;right:12px;bottom:12px;z-index:50;padding:8px 12px;border:1px solid var(--water-line);border-radius:999px;background:#fff;color:var(--ink-sub);font-size:12px;font-weight:700;box-shadow:var(--shadow);cursor:pointer;opacity:.9";
+  b.onclick=async()=>{ try{ await firebase.auth().signOut(); }catch(e){} location.reload(); };
+  document.body.appendChild(b);
+}
+function showLogin(auth){
+  if(document.getElementById("loginOverlay")) return;
+  const o=document.createElement("div");
+  o.id="loginOverlay";
+  o.style.cssText="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px";
+  o.innerHTML=`
+    <div style="width:100%;max-width:360px;background:#fff;border:1px solid var(--water-line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px">
+      <div style="font-size:20px;font-weight:800;color:var(--water-deep)">LOG サウナ点検</div>
+      <div style="font-size:13px;color:var(--ink-sub);margin:6px 0 18px">スタッフ用パスワードを入力してください</div>
+      <input id="loginPw" type="password" inputmode="text" autocomplete="current-password" placeholder="パスワード"
+        style="width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid var(--water-line);border-radius:12px;background:#fff;color:var(--ink);font-size:16px;outline:none">
+      <button id="loginBtn"
+        style="width:100%;margin-top:12px;padding:13px;border:0;border-radius:12px;background:var(--water);color:#fff;font-size:16px;font-weight:700;cursor:pointer">ログイン</button>
+      <div id="loginErr" style="color:var(--bad);font-size:13px;margin-top:10px;min-height:18px"></div>
+    </div>`;
+  document.body.appendChild(o);
+  const pw=o.querySelector("#loginPw"), btn=o.querySelector("#loginBtn"), err=o.querySelector("#loginErr");
+  const submit=async()=>{
+    const v=pw.value;
+    if(!v){ err.textContent="パスワードを入力してください"; return; }
+    btn.disabled=true; btn.textContent="確認中…"; err.textContent="";
+    try{
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      await auth.signInWithEmailAndPassword(STAFF_EMAIL, v);
+      // 成功時は onAuthStateChanged が removeLogin/resolve を実行
+    }catch(e){
+      err.textContent="パスワードが違います";
+      btn.disabled=false; btn.textContent="ログイン"; pw.select();
+    }
+  };
+  btn.onclick=submit;
+  pw.addEventListener("keydown",(e)=>{ if(e.key==="Enter") submit(); });
+  setTimeout(()=>pw.focus(),50);
+}
+function removeLogin(){ const o=document.getElementById("loginOverlay"); if(o) o.remove(); }
 function firebaseAdapter(){
   const db=firebase.firestore();
   return {

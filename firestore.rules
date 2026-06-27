@@ -1,8 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 当面は誰でも読み書き可（社内運用・URL非公開前提）。
-    // 後でスタッフ用ログインを入れたら if request.auth != null 等に変更。
-    match /{document=**} { allow read, write: if true; }
+    // 許可されたスタッフ共通アカウント（UID固定）だけ読み書き可。
+    // それ以外（未ログイン・別アカウント）は一切拒否。
+    match /{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == "Cyl2VjrgEGa5UmoY5y47D8WY5ht2";
+    }
   }
 }
