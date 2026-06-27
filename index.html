@@ -190,6 +190,24 @@
   .tlog .pp{margin-left:auto;font-size:13px;color:var(--ink);font-weight:700}
   .tlog .who2{font-size:11.5px;color:var(--ink-sub);font-weight:600}
 
+  /* 月次レポート */
+  .repmonth{display:flex;align-items:center;gap:10px}
+  .repmonth label{font-size:12.5px;font-weight:700;color:var(--ink-sub)}
+  .repmonth input[type=month]{font:inherit;padding:9px 11px;border:1px solid var(--water-line);border-radius:10px;color:var(--ink)}
+  .rephero{background:linear-gradient(135deg,var(--water) 0%,var(--water-deep) 100%);color:#fff;border-radius:var(--radius);
+    padding:20px 18px;margin:12px 0;box-shadow:var(--shadow)}
+  .rephero .rh-title{font-size:19px;font-weight:800;letter-spacing:.02em}
+  .rephero .rh-sub{font-size:12.5px;opacity:.9;margin-top:4px;font-weight:600}
+  .repgrid{display:flex;gap:10px;flex-wrap:wrap}
+  .repbox{flex:1;min-width:74px;background:var(--water-soft);border-radius:12px;padding:12px 8px;text-align:center}
+  .repnum{font-size:26px;font-weight:800;color:var(--water-deep);line-height:1}
+  .repnum span{font-size:13px;margin-left:1px}
+  .repbox small{display:block;font-size:11px;color:var(--ink-sub);font-weight:700;margin-top:5px}
+  .repline{margin-top:10px;font-size:14px;color:var(--ink)}
+  .repline b{color:var(--ink)}
+  .repline.bad b{color:var(--bad)} .repline.warn b{color:#B9791B} .repline.ok b{color:var(--ok)}
+  .repnote{margin-top:10px;font-size:12.5px;color:var(--ink-sub);background:var(--water-soft);border-radius:12px;padding:10px 12px;line-height:1.6}
+
   /* 消耗品アラートの点滅 */
   @keyframes alertPulse{0%,100%{box-shadow:0 0 0 0 rgba(216,81,76,.0);border-color:var(--bad)}
     50%{box-shadow:0 0 0 4px rgba(216,81,76,.18);border-color:var(--bad)}}
@@ -396,6 +414,7 @@ function adapterFrom(get,set,dget,dset){
     async addTemp(r){ const a=(await get(KEY_TEMPS))||[]; a.push(r); await set(KEY_TEMPS,a); },
     async getTemps(){ return (await get(KEY_TEMPS))||[]; },
     watchTemps(date,cb){ get(KEY_TEMPS).then(a=>cb((a||[]).filter(x=>x.date===date))); return ()=>{}; },
+    async getConfig(){ return {}; },
     async devGet(k){ return await dget(k); },
     async devSet(k,v){ return await dset(k,v); }
   };
@@ -476,6 +495,7 @@ function firebaseAdapter(){
     async getTemps(){ const q=await db.collection("temps").orderBy("ts","desc").get(); return q.docs.map(d=>d.data()); },
     watchTemps(date,cb){ return db.collection("temps").where("date","==",date)
       .onSnapshot(s=>cb(s.docs.map(d=>d.data())), e=>console.warn("temps watch error",e)); },
+    async getConfig(){ try{ const d=await db.collection("meta").doc("config").get(); return d.exists?d.data():{}; }catch(e){ return {}; } },
     async devGet(k){ try{return localStorage.getItem("dev:"+k);}catch(e){return null;} },
     async devSet(k,v){ try{localStorage.setItem("dev:"+k,v);}catch(e){} }
   };
@@ -494,7 +514,7 @@ function go(page,arg){
   window.scrollTo(0,0);
   ({home:renderHome,daily:()=>renderChecklist("daily"),weekly:()=>renderChecklist("weekly"),
     monthly:()=>renderChecklist("monthly"),fire:()=>renderChecklist("fire"),
-    parts:renderParts,manual:renderManual,temps:renderTemps,records:renderRecords}[page]||renderHome)(arg);
+    parts:renderParts,manual:renderManual,temps:renderTemps,records:renderRecords,report:renderReport}[page]||renderHome)(arg);
 }
 
 async function renderHome(){
@@ -816,6 +836,7 @@ async function renderRecords(){
   V.innerHTML=`
     <div class="ptitle"><h1>記録を見る</h1><p>日報・点検履歴（全端末で共有）</p></div>
     <div class="wrap">
+      <button class="btn" style="margin-bottom:10px" onclick="go('report')">📊 月次レポートを作成（会議用）</button>
       <div class="filt">
         ${[["all","すべて"],["daily","日次"],["weekly","週次"],["monthly","月次"],["fire","消防"]].map(([k,l])=>
           `<button class="${f===k?'on':''}" onclick="setFilter('${k}')">${l}</button>`).join("")}
@@ -845,6 +866,121 @@ async function exportCSV(){
   const csv="\uFEFF"+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
   a.download=`LOGサウナ点検記録_${dateStr()}.csv`; a.click();
+}
+
+/* ---- 月次レポート（会議用・白×水色） ---- */
+let reportMonth="";
+const APP_URL="https://yusakusuzuki0614.github.io/log-sauna/";
+const REP_TYPES=[["daily","日次"],["weekly","週次"],["monthly","月次"],["fire","消防"]];
+function ymLabel(ym){ const [y,m]=ym.split("-"); return `${y}年${parseInt(m,10)}月`; }
+function r1(n){ return Math.round(n*10)/10; }
+
+async function renderReport(arg){
+  reportMonth = (arg&&/^\d{4}-\d{2}$/.test(arg)) ? arg : (reportMonth || new Date().toISOString().slice(0,7));
+  const ym=reportMonth, inM=d=>(d||"").slice(0,7)===ym;
+  const [temps,reports,parts,cfg]=await Promise.all([DB.getTemps(),DB.getReports(),DB.getParts(),DB.getConfig?DB.getConfig():{}]);
+
+  // 温度サマリー
+  const tm=temps.filter(t=>inM(t.date));
+  const tv=tm.map(t=>t.temp).filter(v=>typeof v==="number"&&!isNaN(v));
+  const tDays=new Set(tm.map(t=>t.date)).size;
+  const tAvg=tv.length?r1(tv.reduce((a,b)=>a+b,0)/tv.length):null;
+  const tMax=tv.length?r1(Math.max(...tv)):null, tMin=tv.length?r1(Math.min(...tv)):null;
+
+  // 点検実施状況
+  const rp=reports.filter(r=>inM(r.date));
+  const byType={}; REP_TYPES.forEach(([k])=>byType[k]=rp.filter(r=>r.type===k).length);
+  const abn=rp.filter(r=>r.abnormal).length;
+  const noted=rp.filter(r=>r.notes&&r.notes.trim()).map(r=>`${r.date} ${r.typeLabel||r.type}：${r.notes.trim()}`);
+
+  // 設備点検の期限（現時点）
+  const pl=PARTS.map(p=>({p,d:parts[p.id]||"",st:partStatus(p,parts[p.id]||"")}));
+  const over=pl.filter(x=>x.st.k==="over");
+  const soon=pl.filter(x=>x.st.k==="soon"&&x.d);
+  const unset=pl.filter(x=>!x.d);
+
+  // Slack用テキスト
+  const L=[];
+  L.push(`🧖 SAUNA LOG 月次レポート（${ymLabel(ym)}）`);
+  L.push(``);
+  L.push(`■ 温度サマリー`);
+  L.push(tv.length?`平均 ${tAvg}℃ ／ 最高 ${tMax}℃ ／ 最低 ${tMin}℃（記録 ${tv.length}回・${tDays}日）`:`記録なし`);
+  L.push(``);
+  L.push(`■ 点検実施状況`);
+  L.push(`日次 ${byType.daily}回 ／ 週次 ${byType.weekly}回 ／ 月次 ${byType.monthly}回 ／ 消防 ${byType.fire}回（計 ${rp.length}回）`);
+  L.push(`要確認・異常：${abn}件`);
+  if(noted.length){ L.push(`特記：`); noted.slice(0,8).forEach(n=>L.push(`・${n}`)); }
+  L.push(``);
+  L.push(`■ 設備点検の期限`);
+  L.push(over.length?`🔴 超過：${over.map(x=>x.p.n).join("、")}`:`🔴 超過：なし`);
+  L.push(soon.length?`🟡 まもなく：${soon.map(x=>x.p.n).join("、")}`:`🟡 まもなく：なし`);
+  if(unset.length) L.push(`⚪️ 未設定：${unset.map(x=>x.p.n).join("、")}`);
+  L.push(``);
+  L.push(APP_URL);
+  window.__reportText=L.join("\n");
+
+  const slackReady=!!cfg.slackWebhook;
+  V.innerHTML=`
+    <div class="ptitle"><h1>月次レポート</h1><p>会議・記録用サマリー（白×水色）</p></div>
+    <div class="wrap">
+      <div class="card"><div class="body">
+        <div class="repmonth">
+          <label>対象月</label>
+          <input type="month" id="repm" value="${ym}" max="${new Date().toISOString().slice(0,7)}" onchange="changeReportMonth(this.value)">
+        </div>
+      </div></div>
+
+      <div class="rephero"><div class="rh-title">SAUNA LOG 月次レポート</div><div class="rh-sub">${ymLabel(ym)}　/　HARVIA Legend 300</div></div>
+
+      <div class="card"><h2>🌡 温度サマリー</h2><div class="body">
+        ${tv.length?`<div class="repgrid">
+          <div class="repbox"><div class="repnum">${tAvg}<span>℃</span></div><small>平均</small></div>
+          <div class="repbox"><div class="repnum">${tMax}<span>℃</span></div><small>最高</small></div>
+          <div class="repbox"><div class="repnum">${tMin}<span>℃</span></div><small>最低</small></div>
+        </div>
+        <div class="repnote">記録 ${tv.length}回 ・ ${tDays}日間</div>`:`<div class="repnote">この月の温度記録はありません。</div>`}
+      </div></div>
+
+      <div class="card"><h2>📋 点検実施状況</h2><div class="body">
+        <div class="repgrid">
+          ${REP_TYPES.map(([k,l])=>`<div class="repbox"><div class="repnum">${byType[k]}</div><small>${l}</small></div>`).join("")}
+        </div>
+        <div class="repline ${abn?'bad':'ok'}">要確認・異常：<b>${abn}件</b>（実施計 ${rp.length}回）</div>
+        ${noted.length?`<div class="repnote"><b>特記</b><br>${noted.slice(0,8).map(n=>esc(n)).join("<br>")}</div>`:''}
+      </div></div>
+
+      <div class="card"><h2>🛠 設備点検の期限</h2><div class="body">
+        <div class="repline ${over.length?'bad':'ok'}">🔴 超過：<b>${over.length?over.map(x=>esc(x.p.n)).join("、"):"なし"}</b></div>
+        <div class="repline ${soon.length?'warn':'ok'}">🟡 まもなく：<b>${soon.length?soon.map(x=>esc(x.p.n)).join("、"):"なし"}</b></div>
+        ${unset.length?`<div class="repnote">⚪️ 未設定：${unset.map(x=>esc(x.p.n)).join("、")}</div>`:''}
+      </div></div>
+
+      <button class="btn" onclick="postReportSlack()">${slackReady?'Slackに投稿':'Slackに投稿（要・初期設定）'}</button>
+      <button class="btn ghost" onclick="copyReport()">Slack用テキストをコピー</button>
+      <button class="btn ghost" onclick="saveReport()">レポートをテキスト保存</button>
+      <div class="modebar">保存先：<b>${modeLabel()}</b>　—　会議資料は「月次レポート」フォルダに保管がおすすめ</div>
+    </div>`;
+}
+function changeReportMonth(v){ reportMonth=v||new Date().toISOString().slice(0,7); renderReport(reportMonth); }
+async function copyReport(){
+  try{ await navigator.clipboard.writeText(window.__reportText||""); toast("コピーしました（Slackに貼り付け）"); }
+  catch(e){ toast("コピーできませんでした"); }
+}
+function saveReport(){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([window.__reportText||""],{type:"text/plain;charset=utf-8"}));
+  a.download=`SAUNA_LOG_月次レポート_${reportMonth}.txt`; a.click();
+}
+async function postReportSlack(){
+  const cfg=DB.getConfig?await DB.getConfig():{};
+  const url=cfg.slackWebhook;
+  if(!url){ toast("Slack投稿は初期設定が必要。まずはコピーでどうぞ"); copyReport(); return; }
+  try{
+    await fetch(url,{method:"POST",mode:"no-cors",
+      headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},
+      body:"payload="+encodeURIComponent(JSON.stringify({text:window.__reportText||""}))});
+    toast("Slackに投稿しました ✓");
+  }catch(e){ toast("投稿に失敗→コピーします"); copyReport(); }
 }
 
 /* ---- utils ---- */
