@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="LOGサウナ点検">
+<meta name="theme-color" content="#ffffff">
+<title>LOG サウナストーブ 点検・日報</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --water:#3FAFD4;        /* LOG水色 primary */
+    --water-deep:#1C6E8C;   /* 濃い水色：見出し・文字 */
+    --water-soft:#EAF6FB;   /* 淡い水色：カード地 */
+    --water-line:#D5E9F1;   /* 罫線 */
+    --ink:#15303A;          /* 本文 */
+    --ink-sub:#5A7681;      /* 補足 */
+    --ok:#2E9E6B;
+    --warn:#E0972E;
+    --bad:#D8514C;
+    --shadow:0 1px 0 rgba(28,110,140,.04), 0 8px 24px rgba(28,110,140,.07);
+    --radius:18px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+    color:var(--ink);background:var(--bg);
+    -webkit-font-smoothing:antialiased;line-height:1.6;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .app{max-width:680px;margin:0 auto;min-height:100vh}
+
+  /* Header */
+  header.bar{
+    position:sticky;top:0;z-index:30;background:rgba(255,255,255,.92);
+    backdrop-filter:saturate(1.4) blur(8px);
+    border-bottom:1px solid var(--water-line);
+    padding:calc(env(safe-area-inset-top) + 10px) 16px 0;
+  }
+  .bar-row{display:flex;align-items:center;gap:12px;min-height:48px}
+  .brand{display:flex;align-items:baseline;gap:8px;font-weight:800;letter-spacing:.02em}
+  .brand .log{color:var(--water-deep);font-size:20px}
+  .brand .sub{color:var(--ink-sub);font-size:12px;font-weight:600}
+  .back{appearance:none;border:none;background:var(--water-soft);color:var(--water-deep);
+    font-weight:700;border-radius:12px;padding:8px 12px;font-size:14px;display:flex;align-items:center;gap:6px;cursor:pointer}
+  .spacer{flex:1}
+  /* 等高線/水の一筋モチーフ */
+  .contour{height:8px;margin:8px 0 0;display:block;width:100%}
+
+  /* Page title */
+  .ptitle{padding:18px 18px 4px}
+  .ptitle h1{margin:0;font-size:22px;letter-spacing:.01em;color:var(--ink)}
+  .ptitle p{margin:4px 0 0;color:var(--ink-sub);font-size:13px}
+
+  /* Home grid */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px}
+  .tile{
+    position:relative;border:1px solid var(--water-line);background:#fff;border-radius:var(--radius);
+    padding:16px 14px 14px;min-height:118px;cursor:pointer;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;justify-content:space-between;transition:transform .08s ease, box-shadow .15s ease;
+    overflow:hidden;
+  }
+  .tile:active{transform:scale(.975)}
+  .tile .ico{width:34px;height:34px;color:var(--water-deep)}
+  .tile .label{font-weight:800;font-size:16px;margin-top:10px}
+  .tile .meta{font-size:11.5px;color:var(--ink-sub);margin-top:2px;font-weight:600}
+  .tile .wash{position:absolute;right:-18px;bottom:-18px;width:78px;height:78px;border-radius:50%;
+    background:var(--water-soft);z-index:0}
+  .tile>*{position:relative;z-index:1}
+  .tile.alert .dot{position:absolute;top:12px;right:12px;width:10px;height:10px;border-radius:50%;background:var(--bad);z-index:2;box-shadow:0 0 0 4px #fff}
+
+  /* Section / cards */
+  .wrap{padding:8px 16px 40px}
+  .card{background:#fff;border:1px solid var(--water-line);border-radius:var(--radius);box-shadow:var(--shadow);margin:12px 0;overflow:hidden}
+  .card h2{margin:0;padding:14px 16px;font-size:15px;color:var(--water-deep);border-bottom:1px solid var(--water-line);background:var(--water-soft);letter-spacing:.02em}
+  .card .body{padding:6px 16px 14px}
+
+  /* Check rows */
+  .check{display:flex;align-items:flex-start;gap:12px;padding:13px 4px;border-bottom:1px solid var(--water-line);cursor:pointer;user-select:none}
+  .check:last-child{border-bottom:none}
+  .box{flex:0 0 26px;width:26px;height:26px;border-radius:8px;border:2px solid var(--water);background:#fff;margin-top:1px;
+    display:flex;align-items:center;justify-content:center;transition:all .12s ease}
+  .box svg{width:16px;height:16px;color:#fff;opacity:0;transform:scale(.6);transition:all .12s ease}
+  .check.on .box{background:var(--water);border-color:var(--water)}
+  .check.on .box svg{opacity:1;transform:scale(1)}
+  .check .txt{flex:1;font-size:14.5px}
+  .check .txt small{display:block;color:var(--ink-sub);font-size:12px;margin-top:2px}
+  .check.key .txt b{color:var(--bad)}
+  .pill{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:1px}
+  .pill.k{background:#FBE9E8;color:var(--bad)}
+  .pill.c{background:#FDF1DD;color:#B9791B}
+
+  /* Manual text */
+  .mtext h3{font-size:14px;color:var(--water-deep);margin:16px 0 4px}
+  .mtext p,.mtext li{font-size:14px;color:var(--ink)}
+  .mtext ul{margin:4px 0 8px;padding-left:18px}
+  .mtext .note{background:var(--water-soft);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--ink)}
+
+  /* Parts tracker */
+  .part{padding:12px 4px;border-bottom:1px solid var(--water-line)}
+  .part:last-child{border-bottom:none}
+  .part .ph{display:flex;align-items:center;gap:8px;justify-content:space-between}
+  .part .pn{font-weight:800;font-size:14.5px}
+  .badge{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px}
+  .badge.ok{background:#E5F4ED;color:var(--ok)}
+  .badge.soon{background:#FDF1DD;color:#B9791B}
+  .badge.over{background:#FBE9E8;color:var(--bad)}
+  .part .pmeta{font-size:12px;color:var(--ink-sub);margin-top:3px}
+  .part .prow{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .part input[type=date]{font:inherit;padding:7px 9px;border:1px solid var(--water-line);border-radius:10px;color:var(--ink)}
+  .mini{appearance:none;border:1px solid var(--water);background:#fff;color:var(--water-deep);font-weight:700;
+    padding:7px 12px;border-radius:10px;font-size:13px;cursor:pointer}
+
+  /* Inputs */
+  .field{margin:12px 0}
+  .field label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-sub);margin-bottom:5px}
+  .field input[type=text],.field textarea,.field select{
+    width:100%;font:inherit;padding:12px 12px;border:1px solid var(--water-line);border-radius:12px;color:var(--ink);background:#fff}
+  .field textarea{min-height:78px;resize:vertical}
+  .seg{display:flex;gap:8px}
+  .seg button{flex:1;appearance:none;border:1px solid var(--water-line);background:#fff;color:var(--ink-sub);
+    font-weight:700;padding:10px;border-radius:12px;font-size:13.5px;cursor:pointer}
+  .seg button.on{background:var(--water);border-color:var(--water);color:#fff}
+
+  .submit{position:sticky;bottom:0;background:linear-gradient(transparent,#fff 22%);padding:14px 16px calc(env(safe-area-inset-bottom) + 14px)}
+  .btn{display:block;width:100%;appearance:none;border:none;background:var(--water);color:#fff;font-weight:800;
+    font-size:16px;padding:16px;border-radius:14px;cursor:pointer;box-shadow:0 8px 20px rgba(63,175,212,.35)}
+  .btn:active{transform:translateY(1px)}
+  .btn.ghost{background:#fff;color:var(--water-deep);border:1px solid var(--water);box-shadow:none;margin-top:8px;font-size:14px;padding:12px}
+  .progress{font-size:12.5px;color:var(--ink-sub);text-align:center;padding:0 0 10px;font-weight:700}
+
+  /* Records */
+  .rec{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--water-line);border-radius:14px;
+    padding:13px 14px;margin:10px 0;cursor:pointer;box-shadow:var(--shadow)}
+  .rec .rt{display:flex;align-items:center;gap:8px}
+  .rec .typ{font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--water-soft);color:var(--water-deep)}
+  .rec .dt{font-weight:800;font-size:14.5px}
+  .rec .who{color:var(--ink-sub);font-size:12.5px;margin-top:3px}
+  .rec .ab{margin-left:auto;font-size:11px;font-weight:800;color:var(--bad)}
+  .rdetail{font-size:13px;color:var(--ink);margin-top:8px;border-top:1px dashed var(--water-line);padding-top:8px;display:none}
+  .rec.open .rdetail{display:block}
+  .filt{display:flex;gap:8px;overflow:auto;padding:4px 0 8px}
+  .filt button{white-space:nowrap;appearance:none;border:1px solid var(--water-line);background:#fff;color:var(--ink-sub);
+    font-weight:700;padding:7px 13px;border-radius:999px;font-size:13px;cursor:pointer}
+  .filt button.on{background:var(--water-deep);border-color:var(--water-deep);color:#fff}
+
+  .src{font-size:11.5px;color:var(--ink-sub);background:var(--water-soft);border-radius:12px;padding:10px 12px;margin-top:10px}
+  .call{display:inline-flex;align-items:center;gap:6px;font-weight:800;color:var(--water-deep);text-decoration:none;
+    border:1px solid var(--water);border-radius:10px;padding:8px 12px;margin:4px 6px 4px 0;font-size:13.5px}
+
+  .empty{text-align:center;color:var(--ink-sub);padding:48px 20px;font-size:14px}
+  .empty svg{width:46px;height:46px;color:var(--water-line);margin-bottom:8px}
+
+  /* Toast */
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:13px 20px;border-radius:14px;font-weight:700;font-size:14px;
+    opacity:0;pointer-events:none;transition:all .25s ease;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .modebar{font-size:11px;color:var(--ink-sub);text-align:center;padding:10px 16px 24px}
+  .modebar b{color:var(--water-deep)}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="bar-row">
+      <button class="back" id="backBtn" style="display:none" onclick="go('home')">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>戻る
+      </button>
+      <div class="brand"><span class="log">LOG</span><span class="sub">サウナストーブ点検・日報</span></div>
+      <div class="spacer"></div>
+    </div>
+    <svg class="contour" viewBox="0 0 680 8" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 5 Q60 1 120 5 T240 5 T360 5 T480 5 T600 5 T720 5" fill="none" stroke="#3FAFD4" stroke-width="1.4" opacity=".5"/>
+      <path d="M0 7 Q60 3 120 7 T240 7 T360 7 T480 7 T600 7 T720 7" fill="none" stroke="#3FAFD4" stroke-width="1" opacity=".25"/>
+    </svg>
+  </header>
+  <main id="view"></main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================================
+   LOG サウナストーブ 点検・日報アプリ
+   対象機：HARVIA Legend 240（薪／業務用・サ室23m³）
+   設置：大玉村（安達地方広域行政組合消防本部 管轄）
+
+   ▼ データ保存先（全端末で1か所に集約する心臓部）— 環境を自動判定 ▼
+   1) Claude.aiプレビュー : window.storage（共有）で即動作
+   2) GitHub Pages 本番   : 下の FIREBASE_CONFIG を貼ると全端末リアルタイム共有
+   3) 設定前のローカル確認 : localStorage（その端末のみ）
+   ※本番運用は必ず 2)Firebase を設定してください（端末をまたいで1か所集約されます）
+   ========================================================================= */
+
+const FIREBASE_CONFIG = {
+  // ← Firebase コンソールで作成したWebアプリの設定値をここに貼り付け（GitHub設置後）
+  apiKey: "AIzaSyCPHdErGLVD9qgmUPKhmfHmbNqpQNTw1Ck",
+  authDomain: "log-sauna.firebaseapp.com",
+  projectId: "log-sauna",          // ここが入っていればFirebaseモードで起動
+  storageBucket: "log-sauna.firebasestorage.app",
+  messagingSenderId: "732507396989",
+  appId: "1:732507396989:web:710daa90a55e59ea020a14"
+};
+
+/* ---------------- 点検項目データ ---------------- */
+const CHECKS = {
+  daily: {
+    title:"日次点検", lead:"毎運転日に実施（運転前後）",
+    items:[
+      {t:"本体・溶接部に<b>赤錆／亀裂／穴・薄肉化</b>がないか目視", s:"前回の腐食穴あきの再発防止。少しでも怪しければ運転前に管理者へ", key:true},
+      {t:"ガラス扉・パッキンの割れ・隙間がないか", s:"密閉が落ちると不完全燃焼・煤の原因"},
+      {t:"サウナストーンの崩れ・隙間・積みすぎがないか", s:"炉が露出するほどの隙間／上部の積みすぎは故障要因"},
+      {t:"灰受けの灰を<b>ふた付き不燃容器</b>へ。炉内は灰2–3cm残す", s:"条例：ふたのある不燃性の取灰入れ", key:true},
+      {t:"ストーブ周囲・上方の可燃物を安全距離の外へ", s:"薪・タオル・備品。上方は1.5m以上を確保"},
+      {t:"消火器の所在と使用期限を確認"},
+      {t:"焚くのは<b>薪のみ</b>（塗装廃材・石炭・プラ・ガソリン等は厳禁）", s:"条例・取扱説明の禁止事項", key:true},
+      {t:"着火後、煙突の煙が正常（黒煙・逆流・室内への漏れがない）"},
+      {t:"運転中の異臭・異音・過度な赤熱がない"},
+      {t:"終了後の消火を確認し、灰は屋外の不燃容器で保管"},
+    ]
+  },
+  weekly: {
+    title:"週次点検", lead:"週1回・利用の少ない日に実施",
+    items:[
+      {t:"燃焼室の灰を清掃（2–3cm残す）、灰は不燃容器へ"},
+      {t:"ガラスの煤・くもりを清掃"},
+      {t:"サウナストーンを並べ直し（大=下・小=上、空気の通り道を確保）"},
+      {t:"ドアパッキンの密着・劣化をチェック"},
+      {t:"煙突接続部の緩み・煤の付着を確認", s:"緩みは煙漏れ・煙道火災の要因"},
+      {t:"本体脚部・設置面のガタつきを確認"},
+      {t:"消火器・避難動線・出入口の確保を確認"},
+    ]
+  },
+  monthly: {
+    title:"月次点検", lead:"月1回・記録を保管（消防対応の証跡）",
+    items:[
+      {t:"サウナストーンを取り出し、叩いて強度確認。割れ・変色は廃棄／補充", s:"高頻度利用なら前倒しで実施"},
+      {t:"煙突内部の煤量を点検（多ければ清掃を手配）", s:"清掃は年1回以上、高頻度は半年毎"},
+      {t:"本体内外の<b>腐食・薄肉化</b>を重点点検し<b>写真記録</b>", s:"前回穴あき事例の経過観察", key:true},
+      {t:"溶接部・ボルトの緩みを点検"},
+      {t:"消火器の圧力計・期限、警報設備の作動を確認"},
+      {t:"可燃物からの離隔距離を実測し記録（本体・煙突）", s:"条例別表の安全距離。値は南消防署で確認"},
+      {t:"消耗部品（ストーン／パッキン／ガラス／ロストル／取灰入れ）の交換要否を判定"},
+    ]
+  },
+  fire: {
+    title:"消防法チェック", lead:"大玉村／安達地方広域 火災予防条例（消防法第9条）",
+    items:[
+      {t:"本体は可燃物から条例別表の安全距離以上、または不燃材料で有効に遮へい", s:"具体値は南消防署 予防係で確認", cite:true},
+      {t:"煙突は可燃物から、火床1.8m以内=45cm／1.8m超=30cm以上離す", s:"標準値・要確認", cite:true},
+      {t:"煙突は屋根面から60cm以上突出し、ストーブ上方は1.5m以上", s:"標準値・要確認", cite:true},
+      {t:"たき口から火粉が飛散しない構造／ふた付き不燃性の取灰入れ", s:"条例本文に明記", cite:true},
+      {t:"灰は不燃容器で処理し、薪以外を燃やさない"},
+      {t:"必要な点検・整備で火災予防上有効に保持（本アプリで記録を保管）"},
+      {t:"消火器具・施設の警報設備を維持"},
+      {t:"火を使用する設備等の設置・変更は所轄に届出要否を確認（書類は2部作成）", cite:true},
+    ]
+  }
+};
+
+const PARTS = [
+  {id:"stone", n:"サウナストーン", months:6, note:"6か月〜1年で点検・入替（高頻度施設は2〜3か月）。崩れ・変色で交換"},
+  {id:"chimney", n:"煙突清掃", months:12, note:"年1回以上。業務・高頻度は6か月毎"},
+  {id:"gasket", n:"ドアパッキン", months:12, note:"密閉低下時に交換（目安1年〜）"},
+  {id:"glass", n:"耐熱ガラス", months:36, note:"割れ・深い焼付きで交換（状態見て判断）"},
+  {id:"grate", n:"ロストル／取灰入れ", months:24, note:"変形・腐食で交換"},
+  {id:"body", n:"本体（フレーム）点検", months:1, note:"腐食穴・薄肉化が出たらディーラー相談。毎月の重点目視を継続"},
+];
+
+const TILES = [
+  {id:"daily", label:"日次点検", meta:"毎運転日", ico:icoFlame, color:"#D8514C"},
+  {id:"weekly", label:"週次点検", meta:"週1回", ico:icoCal, color:"#3FAFD4"},
+  {id:"monthly", label:"月次点検", meta:"月1回・保管", ico:icoCal2, color:"#1C6E8C"},
+  {id:"parts", label:"消耗部品", meta:"交換アラート", ico:icoWrench, color:"#E0972E"},
+  {id:"manual", label:"業務マニュアル", meta:"運転手順・緊急時", ico:icoBook, color:"#2E9E6B"},
+  {id:"fire", label:"消防法チェック", meta:"大玉村・安達広域", ico:icoFire, color:"#D8514C"},
+  {id:"records", label:"記録を見る", meta:"日報・点検履歴", ico:icoList, color:"#1C6E8C"},
+];
+
+/* ---------------- アイコン（インラインSVG） ---------------- */
+function svg(p){return `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`}
+function icoFlame(){return svg('<path d="M12 3c1 3 4 4 4 8a4 4 0 1 1-8 0c0-1.5.6-2.3 1.3-3 .2 1 .9 1.6 1.7 1.6C12 8 10.5 6 12 3z"/>')}
+function icoCal(){return svg('<rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9h17M8 2.5v4M16 2.5v4"/>')}
+function icoCal2(){return svg('<rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9h17M8 2.5v4M16 2.5v4M8 13h3M8 16.5h6"/>')}
+function icoWrench(){return svg('<path d="M14.5 6a3.5 3.5 0 0 0-4.6 4.3L4 16.2 6 18l5.9-5.9A3.5 3.5 0 0 0 16 7.6L13.7 9.9 12 8.3 14.5 6z"/>')}
+function icoBook(){return svg('<path d="M5 4.5h9a2 2 0 0 1 2 2V20a1.5 1.5 0 0 0-1.5-1.5H5z"/><path d="M5 4.5v14M16 6.5h2.5V20H17"/>')}
+function icoFire(){return svg('<path d="M12 21a6 6 0 0 0 6-6c0-4-3-5-3-9-2 1.5-3 3-3 5-1-1-1.2-2-1-3.5C8 9 6 11 6 15a6 6 0 0 0 6 6z"/>')}
+function icoList(){return svg('<path d="M8 6.5h12M8 12h12M8 17.5h12M4 6.5h.01M4 12h.01M4 17.5h.01"/>')}
+function checkmark(){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>'}
+
+/* =====================================================================
+   ストレージ・アダプタ（環境自動判定）
+   ===================================================================== */
+let DB = null, MODE = "memory";
+const KEY_REPORTS="logsauna:reports", KEY_PARTS="logsauna:parts";
+
+async function bootStore(){
+  // 1) Claude.ai プレビュー
+  if (typeof window!=="undefined" && window.storage && typeof window.storage.set==="function"){
+    MODE="claude"; DB=claudeAdapter(); return;
+  }
+  // 2) Firebase（GitHub本番）
+  if (FIREBASE_CONFIG.projectId){
+    try{ await loadFirebase(); MODE="firebase"; DB=firebaseAdapter(); return; }
+    catch(e){ console.warn("Firebase初期化失敗→ローカルにフォールバック", e); }
+  }
+  // 3) localStorage（設定前のローカル確認）
+  try{
+    const t="__t"; window.localStorage.setItem(t,"1"); window.localStorage.removeItem(t);
+    MODE="local"; DB=localAdapter(); return;
+  }catch(e){ /* 4) memory */ }
+  MODE="memory"; DB=memoryAdapter();
+}
+
+/* --- Claude.ai（window.storage 共有） --- */
+function claudeAdapter(){
+  const get=async(k)=>{ try{const r=await window.storage.get(k,true);return r?JSON.parse(r.value):null;}catch(e){return null;} };
+  const set=(k,v)=>window.storage.set(k,JSON.stringify(v),true);
+  const dget=async(k)=>{ try{const r=await window.storage.get(k,false);return r?r.value:null;}catch(e){return null;} };
+  const dset=(k,v)=>window.storage.set(k,v,false);
+  return adapterFrom(get,set,dget,dset);
+}
+/* --- localStorage --- */
+function localAdapter(){
+  const get=async(k)=>{const v=localStorage.getItem(k);return v?JSON.parse(v):null;};
+  const set=async(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+  const dget=async(k)=>localStorage.getItem("dev:"+k);
+  const dset=async(k,v)=>localStorage.setItem("dev:"+k,v);
+  return adapterFrom(get,set,dget,dset);
+}
+/* --- memory（最終手段：保存はされません） --- */
+function memoryAdapter(){
+  const m={};
+  const get=async(k)=>m[k]??null, set=async(k,v)=>{m[k]=v;};
+  const dget=async(k)=>m["d:"+k]??null, dset=async(k,v)=>{m["d:"+k]=v;};
+  return adapterFrom(get,set,dget,dset);
+}
+/* 共通：単一配列read-modify-write方式（Claude/local/memory用） */
+function adapterFrom(get,set,dget,dset){
+  return {
+    async addReport(r){ const a=(await get(KEY_REPORTS))||[]; a.push(r); await set(KEY_REPORTS,a); },
+    async getReports(){ return (await get(KEY_REPORTS))||[]; },
+    async getParts(){ return (await get(KEY_PARTS))||{}; },
+    async setPart(id,date){ const p=(await get(KEY_PARTS))||{}; p[id]=date; await set(KEY_PARTS,p); },
+    async devGet(k){ return await dget(k); },
+    async devSet(k,v){ return await dset(k,v); }
+  };
+}
+/* --- Firebase（add方式：多端末同時でも取りこぼし無し） --- */
+function loadFirebase(){
+  return new Promise((res,rej)=>{
+    const add=(src)=>new Promise((ok,ng)=>{const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=ng;document.head.appendChild(s);});
+    add("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js")
+      .then(()=>add("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"))
+      .then(()=>{ firebase.initializeApp(FIREBASE_CONFIG); res(); }).catch(rej);
+  });
+}
+function firebaseAdapter(){
+  const db=firebase.firestore();
+  return {
+    async addReport(r){ await db.collection("reports").add(r); },
+    async getReports(){ const q=await db.collection("reports").orderBy("ts","desc").get(); return q.docs.map(d=>d.data()); },
+    async getParts(){ const d=await db.collection("meta").doc("parts").get(); return d.exists?d.data():{}; },
+    async setPart(id,date){ await db.collection("meta").doc("parts").set({[id]:date},{merge:true}); },
+    async devGet(k){ try{return localStorage.getItem("dev:"+k);}catch(e){return null;} },
+    async devSet(k,v){ try{localStorage.setItem("dev:"+k,v);}catch(e){} }
+  };
+}
+
+/* =====================================================================
+   画面
+   ===================================================================== */
+const V=document.getElementById("view"), BACK=document.getElementById("backBtn");
+let staffName="";
+
+function go(page,arg){
+  BACK.style.display = page==="home" ? "none":"flex";
+  window.scrollTo(0,0);
+  ({home:renderHome,daily:()=>renderChecklist("daily"),weekly:()=>renderChecklist("weekly"),
+    monthly:()=>renderChecklist("monthly"),fire:()=>renderChecklist("fire"),
+    parts:renderParts,manual:renderManual,records:renderRecords}[page]||renderHome)(arg);
+}
+
+async function renderHome(){
+  const parts=await DB.getParts();
+  const overdue=PARTS.some(p=>partStatus(p,parts[p.id]).k==="over");
+  V.innerHTML=`
+    <div class="ptitle"><h1>きょうの点検</h1><p>${todayLabel()}　/　HARVIA Legend 240（薪・23m³）</p></div>
+    <div class="grid">
+      ${TILES.map(t=>{
+        const isAlert = t.id==="parts" && overdue;
+        return `<div class="tile${isAlert?' alert':''}" onclick="go('${t.id}')">
+          ${isAlert?'<span class="dot"></span>':''}
+          <span class="ico" style="color:${t.color}">${t.ico()}</span>
+          <div><div class="label">${t.label}</div><div class="meta">${isAlert?'交換時期 超過あり':t.meta}</div></div>
+          <span class="wash"></span>
+        </div>`;
+      }).join("")}
+    </div>
+    <div class="modebar">保存先：<b>${modeLabel()}</b>　—　${modeHint()}</div>`;
+}
+
+/* ---- チェックリスト（日次/週次/月次/消防） ---- */
+let chState={};
+async function renderChecklist(type){
+  const C=CHECKS[type];
+  staffName = staffName || (await DB.devGet("staff")) || "";
+  chState={};
+  const isFire = type==="fire";
+  V.innerHTML=`
+    <div class="ptitle"><h1>${C.title}</h1><p>${C.lead}</p></div>
+    <div class="wrap">
+      ${isFire?'':`<div class="card"><div class="body">
+        <div class="field"><label>担当者名</label><input type="text" id="staff" placeholder="氏名を入力" value="${esc(staffName)}"></div>
+        ${type==='daily'?`<div class="field"><label>区分</label><div class="seg" id="shift">
+          ${["午前","午後","終日"].map((s,i)=>`<button class="${i===2?'on':''}" onclick="pickShift(this)">${s}</button>`).join("")}
+        </div></div>`:''}
+      </div></div>`}
+      <div class="card"><h2>点検項目</h2><div class="body" id="items">
+        ${C.items.map((it,i)=>`
+          <div class="check${it.key?' key':''}" data-i="${i}" onclick="toggle(${i})">
+            <div class="box">${checkmark()}</div>
+            <div class="txt">${it.t}${it.key?'<span class="pill k">重点</span>':''}${it.cite?'<span class="pill c">要確認</span>':''}${it.s?`<small>${it.s}</small>`:''}</div>
+          </div>`).join("")}
+      </div></div>
+      ${isFire?fireRef():''}
+      <div class="card"><div class="body">
+        <div class="field"><label>特記事項・異常の内容（任意）</label><textarea id="notes" placeholder="気づいたこと、交換・修理が必要な箇所など"></textarea></div>
+      </div></div>
+    </div>
+    <div class="submit">
+      <div class="progress" id="prog"></div>
+      <button class="btn" onclick="submitCheck('${type}')">この点検を記録して保管</button>
+    </div>`;
+  updateProg(type);
+}
+function toggle(i){ chState[i]=!chState[i]; const el=V.querySelector(`.check[data-i="${i}"]`); el.classList.toggle("on",chState[i]); updateProg(curType()); }
+let _shift="終日";
+function pickShift(b){ [...b.parentNode.children].forEach(x=>x.classList.remove("on")); b.classList.add("on"); _shift=b.textContent; }
+function curType(){ return (document.querySelector(".ptitle h1")||{}).textContent; }
+function updateProg(){ const total=document.querySelectorAll(".check").length; const done=Object.values(chState).filter(Boolean).length;
+  const p=document.getElementById("prog"); if(p) p.textContent=`${done} / ${total} 項目を確認`; }
+
+function fireRef(){
+  return `<div class="card"><h2>管轄・連絡先（保存版）</h2><div class="body">
+    <a class="call" href="tel:0243332875">📞 南消防署 予防係 0243-33-2875</a>
+    <a class="call" href="tel:0243221211">📞 消防本部 0243-22-1211</a>
+    <div class="src">
+      根拠：<b>安達地方広域行政組合火災予防条例</b>（消防法第9条／火を使用する設備の位置・構造・管理の基準）。管轄は安達地方広域行政組合消防本部・<b>南消防署（本宮市/大玉村）</b>。FAX 0243-22-1355。届出書類は<b>2部</b>作成し1部に受付印を受けて返付。<br>
+      ※離隔距離など数値は全国標準値を記載しています。<b>最終確定は南消防署 予防係に図面を持参して確認</b>してください。
+    </div>
+  </div></div>`;
+}
+
+async function submitCheck(type){
+  const total=CHECKS[type].items.length, done=Object.keys(chState).filter(k=>chState[k]).length;
+  const staffEl=document.getElementById("staff");
+  if(staffEl){ staffName=staffEl.value.trim(); if(!staffName){ toast("担当者名を入力してください"); staffEl.focus(); return; } await DB.devSet("staff",staffName); }
+  const notes=(document.getElementById("notes")||{}).value||"";
+  const items={}; CHECKS[type].items.forEach((it,i)=>items[strip(it.t)]=!!chState[i]);
+  const abnormal = done<total || notes.trim().length>0;
+  const rep={ ts:Date.now(), type, typeLabel:CHECKS[type].title, date:dateStr(), staff:staffName||"-",
+    shift: type==="daily"?_shift:"", done, total, abnormal, notes:notes.trim(), items };
+  try{ await DB.addReport(rep); toast(done<total?"記録しました（未確認項目あり）":"点検完了・記録しました ✓"); setTimeout(()=>go("home"),650); }
+  catch(e){ toast("保存に失敗しました"); console.error(e); }
+}
+
+/* ---- 消耗部品 ---- */
+async function renderParts(){
+  const last=await DB.getParts();
+  V.innerHTML=`
+    <div class="ptitle"><h1>消耗部品の交換アラート</h1><p>最終実施日を入れると次回目安と状態を自動表示</p></div>
+    <div class="wrap"><div class="card"><div class="body">
+      ${PARTS.map(p=>{ const d=last[p.id]||""; const st=partStatus(p,d);
+        return `<div class="part">
+          <div class="ph"><span class="pn">${p.n}</span><span class="badge ${st.k}">${st.label}</span></div>
+          <div class="pmeta">目安：${p.months>=12?(p.months/12)+"年":p.months+"か月"}毎　${d?'／ 次回目安 '+st.next:''}</div>
+          <div class="pmeta">${p.note}</div>
+          <div class="prow">
+            <input type="date" id="pd_${p.id}" value="${d}">
+            <button class="mini" onclick="savePart('${p.id}')">最終実施日を更新</button>
+            <button class="mini" onclick="setToday('${p.id}')">今日にする</button>
+          </div>
+        </div>`;}).join("")}
+    </div></div>
+    <div class="modebar">部品交換の履歴も「記録を見る」に残すと、消防の点検整備の証跡になります。</div>
+    </div>`;
+}
+function partStatus(p,d){
+  if(!d) return {k:"soon",label:"未設定",next:"-"};
+  const next=new Date(d); next.setMonth(next.getMonth()+p.months);
+  const ns=next.toISOString().slice(0,10); const diff=(next-new Date())/(86400000);
+  if(diff<0) return {k:"over",label:"交換時期 超過",next:ns};
+  if(diff<30) return {k:"soon",label:"まもなく",next:ns};
+  return {k:"ok",label:"良好",next:ns};
+}
+async function savePart(id){ const v=document.getElementById("pd_"+id).value; if(!v){toast("日付を選んでください");return;} await DB.setPart(id,v); toast("更新しました"); renderParts(); }
+async function setToday(id){ await DB.setPart(id,dateStr()); toast("今日に更新しました"); renderParts(); }
+
+/* ---- 業務マニュアル ---- */
+function renderManual(){
+  V.innerHTML=`
+  <div class="ptitle"><h1>業務マニュアル</h1><p>HARVIA Legend 240（薪）・LOG サウナ運用</p></div>
+  <div class="wrap mtext">
+    <div class="card"><h2>1. 運転前の準備</h2><div class="body">
+      <ul>
+        <li>本体・溶接部の<b>腐食/亀裂/穴</b>を目視（日次点検を先に実施）。</li>
+        <li>サウナストーンの並び（大=下・小=上）と隙間、炉の露出がないか確認。</li>
+        <li>ストーブ周囲・上方の可燃物を安全距離の外へ。消火器の位置を確認。</li>
+        <li>煙突ダンパー（あれば）を開き、ドラフトを確保。</li>
+      </ul></div></div>
+    <div class="card"><h2>2. 着火・運転</h2><div class="body">
+      <ul>
+        <li>焚くのは<b>薪のみ</b>。乾燥した薪を使用（含水率が高いと煤・煙道火災の原因）。</li>
+        <li>急激な高温焚きを避け、徐々に昇温。室温は目安90℃前後。</li>
+        <li>着火後すぐ、煙突の煙が正常か（黒煙・逆流・室内漏れがない）を確認。</li>
+      </ul>
+      <div class="note">禁止：塗装廃材・合板・石炭・プラスチック・発泡スチロール・ガソリン等の助燃剤。腐食・有害ガス・火災の原因になります。</div>
+    </div></div>
+    <div class="card"><h2>3. ロウリュの注意</h2><div class="body">
+      <ul>
+        <li>水は<b>サウナストーンに</b>かける。熱した鋼板へ直接かけない（局所腐食・穴あきの一因）。</li>
+        <li>一度に大量にかけない。適量を複数回に分ける。</li>
+      </ul></div></div>
+    <div class="card"><h2>4. 運転終了・消火・灰処理</h2><div class="body">
+      <ul>
+        <li>燃え尽きを確認し、消火を確実に。余熱・残り火に注意。</li>
+        <li>灰は<b>ふた付き不燃容器</b>へ。炉内は2–3cm残してよい。容器は屋外の不燃物の上で保管。</li>
+        <li>火の気がないことを再確認して退室・施錠。</li>
+      </ul></div></div>
+    <div class="card"><h2>5. 緊急時対応</h2><div class="body">
+      <ul>
+        <li><b>火災・煙道火災</b>：直ちに119。延焼物から離れ、可能なら吸気を絞り酸素を断つ。無理な消火はしない。</li>
+        <li><b>やけど</b>：流水で十分に冷却し、必要なら救急要請。</li>
+      </ul>
+      <a class="call" href="tel:119">📞 119（消防・救急）</a>
+      <a class="call" href="tel:0243332875">📞 南消防署 0243-33-2875</a>
+      <div class="src">設備の不具合（腐食穴・煙突等）はハルビアディーラーへ。連絡先を別途登録しておくと安心です。</div>
+    </div></div>
+    <div class="card"><h2>6. 記録・体制</h2><div class="body">
+      <ul>
+        <li>毎運転日に<b>日次点検＋日報</b>を記録（このアプリ）。記録は全端末で1か所に集約。</li>
+        <li>週次・月次も実施し、月次は写真記録を残す（消防の点検整備の証跡）。</li>
+        <li>「準備・提案はアプリ、最終判断と外部対応は管理者」が原則。</li>
+      </ul></div></div>
+  </div>`;
+}
+
+/* ---- 記録を見る ---- */
+let _filter="all";
+async function renderRecords(){
+  let reps=await DB.getReports(); reps=reps.slice().sort((a,b)=>b.ts-a.ts);
+  const f=_filter, list = f==="all"?reps:reps.filter(r=>r.type===f);
+  V.innerHTML=`
+    <div class="ptitle"><h1>記録を見る</h1><p>日報・点検履歴（全端末で共有）</p></div>
+    <div class="wrap">
+      <div class="filt">
+        ${[["all","すべて"],["daily","日次"],["weekly","週次"],["monthly","月次"],["fire","消防"]].map(([k,l])=>
+          `<button class="${f===k?'on':''}" onclick="setFilter('${k}')">${l}</button>`).join("")}
+      </div>
+      ${list.length? list.map((r,i)=>`
+        <button class="rec" onclick="this.classList.toggle('open')">
+          <div class="rt">
+            <span class="typ">${r.typeLabel||r.type}</span>
+            <span class="dt">${r.date}</span>
+            ${r.abnormal?'<span class="ab">要確認</span>':'<span class="ab" style="color:var(--ok)">完了</span>'}
+          </div>
+          <div class="who">${esc(r.staff)}${r.shift?'・'+r.shift:''}　${r.done}/${r.total}項目</div>
+          <div class="rdetail">
+            ${r.notes?`<div style="margin-bottom:6px"><b>特記：</b>${esc(r.notes)}</div>`:''}
+            ${Object.entries(r.items||{}).map(([k,v])=>`<div>${v?'✅':'⬜️'} ${esc(k)}</div>`).join("")}
+          </div>
+        </button>`).join("")
+       : `<div class="empty">${icoList()}<div>まだ記録がありません。<br>点検を実施すると、ここに全員分が集約されます。</div></div>`}
+      ${reps.length?`<button class="btn ghost" onclick="exportCSV()">CSVで書き出して保管</button>`:''}
+    </div>`;
+}
+function setFilter(k){ _filter=k; renderRecords(); }
+async function exportCSV(){
+  const reps=(await DB.getReports()).slice().sort((a,b)=>a.ts-b.ts);
+  const rows=[["日時","種別","担当","区分","確認数","総数","異常","特記"]];
+  reps.forEach(r=>rows.push([new Date(r.ts).toLocaleString("ja-JP"),r.typeLabel||r.type,r.staff,r.shift||"",r.done,r.total,r.abnormal?"要確認":"完了",(r.notes||"").replace(/\n/g," ")]));
+  const csv="\uFEFF"+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download=`LOGサウナ点検記録_${dateStr()}.csv`; a.click();
+}
+
+/* ---- utils ---- */
+function dateStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function todayLabel(){ const d=new Date(); const w="日月火水木金土"[d.getDay()];
+  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}（${w}）`; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function strip(s){ return s.replace(/<[^>]+>/g,""); }
+function modeLabel(){ return {claude:"プレビュー共有", firebase:"Firebase（全端末共有）", local:"この端末のみ（ローカル）", memory:"一時メモリ（未保存）"}[MODE]; }
+function modeHint(){ return {claude:"このプレビューで動作確認できます", firebase:"本番運用OK", local:"Firebase設定で全端末共有に切替", memory:"設定が必要です"}[MODE]; }
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2200); }
+
+/* boot */
+(async()=>{ await bootStore(); go("home"); })();
+</script>
+</body>
+</html>
