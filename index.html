@@ -44,10 +44,9 @@
     padding:calc(env(safe-area-inset-top) + 10px) 16px 0;
   }
   .bar-row{display:flex;align-items:center;gap:12px;min-height:48px}
-  .brand{display:flex;align-items:baseline;gap:8px;font-weight:800;letter-spacing:.02em}
-  .brand .log{color:var(--water-deep);font-size:20px}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:.02em}
+  .brand .logomark{height:22px;width:auto;display:block;flex:0 0 auto}
   .brand .sub{color:var(--ink-sub);font-size:12px;font-weight:600}
-  .poolmark{height:22px;width:auto;display:block;flex:0 0 auto;opacity:.9}
   .back{appearance:none;border:none;background:var(--water-soft);color:var(--water-deep);
     font-weight:700;border-radius:12px;padding:8px 12px;font-size:14px;display:flex;align-items:center;gap:6px;cursor:pointer}
   .spacer{flex:1}
@@ -73,6 +72,10 @@
   .tile .meta{font-size:11.5px;color:var(--ink-sub);margin-top:2px;font-weight:600}
   .tile .wash{position:absolute;right:-18px;bottom:-18px;width:78px;height:78px;border-radius:50%;
     background:var(--water-soft);z-index:0}
+  .tile .num{position:absolute;right:0;bottom:0;width:46px;height:46px;z-index:2;
+    display:flex;align-items:center;justify-content:center;pointer-events:none;
+    font-family:"Helvetica Neue",Arial,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;
+    font-weight:900;font-size:40px;line-height:1;color:#C2410C}
   .tile>*{position:relative;z-index:1}
   .tile.alert .dot{position:absolute;top:12px;right:12px;width:10px;height:10px;border-radius:50%;background:var(--bad);z-index:2;box-shadow:0 0 0 4px #fff}
 
@@ -204,9 +207,8 @@
       <button class="back" id="backBtn" style="display:none" onclick="go('home')">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>戻る
       </button>
-      <div class="brand"><span class="log">LOG</span><span class="sub">サウナストーブ点検・日報</span></div>
+      <div class="brand"><img class="logomark" src="assets/log-wordmark.png" alt="LOG" /><span class="sub">サウナストーブ点検・日報</span></div>
       <div class="spacer"></div>
-      <img class="poolmark" src="assets/pool-wordmark.png" alt="POOL" />
     </div>
     <svg class="contour" viewBox="0 0 680 8" preserveAspectRatio="none" aria-hidden="true">
       <path d="M0 5 Q60 1 120 5 T240 5 T360 5 T480 5 T600 5 T720 5" fill="none" stroke="#3FAFD4" stroke-width="1.4" opacity=".5"/>
@@ -501,13 +503,14 @@ async function renderHome(){
   V.innerHTML=`
     <div class="ptitle"><h1>SAUNA LOG</h1><p>${todayLabel()}　/　HARVIA Legend 300（薪・23m³）</p></div>
     <div class="grid">
-      ${TILES.map(t=>{
+      ${TILES.map((t,i)=>{
         const isAlert = t.id==="parts" && overdue;
         return `<div class="tile${isAlert?' alert':''}" onclick="go('${t.id}')">
           ${isAlert?'<span class="dot"></span>':''}
           <span class="ico" style="color:${t.color}">${t.ico()}</span>
           <div><div class="label">${t.label}</div><div class="meta">${isAlert?'期限 超過あり':t.meta}</div></div>
           <span class="wash"></span>
+          <span class="num">${i+1}</span>
         </div>`;
       }).join("")}
     </div>
