@@ -162,6 +162,34 @@
 
   .modebar{font-size:11px;color:var(--ink-sub);text-align:center;padding:10px 16px 24px}
   .modebar b{color:var(--water-deep)}
+
+  /* 温度管理 */
+  .field input[type=number]{width:100%;font:inherit;padding:12px;border:1px solid var(--water-line);border-radius:12px;color:var(--ink);background:#fff}
+  .trow{display:flex;gap:10px}
+  .trow .field{flex:1;margin:12px 0}
+  .tnow{font-size:12px;color:var(--ink-sub);margin-top:4px}
+  .tnow b{color:var(--water-deep);font-size:14px}
+  .tbig{display:flex;align-items:baseline;gap:10px;margin:0 0 6px}
+  .tbig b{font-size:30px;line-height:1;color:var(--water-deep);font-weight:800}
+  .tbig span{font-size:12px;color:var(--ink-sub)}
+  .tchart{width:100%;height:auto;display:block;touch-action:none}
+  .tdate{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+  .tdate label{font-size:12.5px;font-weight:700;color:var(--ink-sub)}
+  .tdate input[type=date]{font:inherit;padding:8px 10px;border:1px solid var(--water-line);border-radius:10px;color:var(--ink)}
+  .tlog{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--water-line)}
+  .tlog:last-child{border-bottom:none}
+  .tlog .tm{font-weight:800;font-size:14px;color:var(--ink);width:50px}
+  .tlog .tv{font-weight:800;color:var(--water-deep);font-size:15px}
+  .tlog .pp{margin-left:auto;font-size:13px;color:var(--ink);font-weight:700}
+  .tlog .who2{font-size:11.5px;color:var(--ink-sub);font-weight:600}
+
+  /* 消耗品アラートの点滅 */
+  @keyframes alertPulse{0%,100%{box-shadow:0 0 0 0 rgba(216,81,76,.0);border-color:var(--bad)}
+    50%{box-shadow:0 0 0 4px rgba(216,81,76,.18);border-color:var(--bad)}}
+  @keyframes dotPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.35);opacity:.55}}
+  .tile.alert{border-color:var(--bad);animation:alertPulse 1.1s ease-in-out infinite}
+  .tile.alert .label{color:var(--bad)}
+  .tile.alert .dot{animation:dotPulse 1.1s ease-in-out infinite}
   @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -272,13 +300,21 @@ const PARTS = [
   {id:"glass", n:"耐熱ガラス", months:36, note:"割れ・深い焼付きで交換（状態見て判断）"},
   {id:"grate", n:"ロストル／取灰入れ", months:24, note:"変形・腐食で交換"},
   {id:"body", n:"本体（フレーム）点検", months:1, note:"腐食穴・薄肉化が出たらディーラー相談。毎月の重点目視を継続"},
+  // ↓ 確認日から1か月で再確認する設備点検（月次）
+  {id:"water",  n:"ウォーターサーバー清掃", months:1, cat:"check", note:"月1回・確認日から1か月で再確認。給水口・受け皿を清掃"},
+  {id:"washer", n:"洗濯機フィルタ掃除",     months:1, cat:"check", note:"月1回・糸くずフィルタの清掃"},
+  {id:"dryer",  n:"乾燥機フィルタ掃除",     months:1, cat:"check", note:"月1回・乾燥フィルタの埃を除去（高頻度時はこまめに）"},
+  {id:"vent",   n:"施設内換気扇の掃除",     months:1, cat:"check", note:"月1回・各換気扇の埃・油汚れを除去"},
+  {id:"co",     n:"COチェッカー電池確認",   months:1, cat:"check", note:"月1回・電池残量と作動表示を確認"},
+  {id:"emerg",  n:"サウナ室 非常ボタン動作確認", months:1, cat:"check", note:"月1回・押下で警報が鳴るか実際に確認"},
 ];
 
 const TILES = [
   {id:"daily", label:"日次点検", meta:"毎運転日", ico:icoFlame, color:"#D8514C"},
   {id:"weekly", label:"週次点検", meta:"週1回", ico:icoCal, color:"#3FAFD4"},
   {id:"monthly", label:"月次点検", meta:"月1回・保管", ico:icoCal2, color:"#1C6E8C"},
-  {id:"parts", label:"消耗部品", meta:"交換アラート", ico:icoWrench, color:"#E0972E"},
+  {id:"temps", label:"温度管理", meta:"温度・利用人数", ico:icoTemp, color:"#E0972E"},
+  {id:"parts", label:"消耗品・設備点検", meta:"交換・清掃アラート", ico:icoWrench, color:"#E0972E"},
   {id:"manual", label:"業務マニュアル", meta:"運転手順・緊急時", ico:icoBook, color:"#2E9E6B"},
   {id:"fire", label:"消防法チェック", meta:"大玉村・安達広域", ico:icoFire, color:"#D8514C"},
   {id:"records", label:"記録を見る", meta:"日報・点検履歴", ico:icoList, color:"#1C6E8C"},
@@ -293,13 +329,14 @@ function icoWrench(){return svg('<path d="M14.5 6a3.5 3.5 0 0 0-4.6 4.3L4 16.2 6
 function icoBook(){return svg('<path d="M5 4.5h9a2 2 0 0 1 2 2V20a1.5 1.5 0 0 0-1.5-1.5H5z"/><path d="M5 4.5v14M16 6.5h2.5V20H17"/>')}
 function icoFire(){return svg('<path d="M12 21a6 6 0 0 0 6-6c0-4-3-5-3-9-2 1.5-3 3-3 5-1-1-1.2-2-1-3.5C8 9 6 11 6 15a6 6 0 0 0 6 6z"/>')}
 function icoList(){return svg('<path d="M8 6.5h12M8 12h12M8 17.5h12M4 6.5h.01M4 12h.01M4 17.5h.01"/>')}
+function icoTemp(){return svg('<path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0z"/><path d="M12 9.5v5"/>')}
 function checkmark(){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>'}
 
 /* =====================================================================
    ストレージ・アダプタ（環境自動判定）
    ===================================================================== */
 let DB = null, MODE = "memory";
-const KEY_REPORTS="logsauna:reports", KEY_PARTS="logsauna:parts";
+const KEY_REPORTS="logsauna:reports", KEY_PARTS="logsauna:parts", KEY_TEMPS="logsauna:temps";
 
 async function bootStore(){
   // 1) Claude.ai プレビュー
@@ -349,6 +386,9 @@ function adapterFrom(get,set,dget,dset){
     async getReports(){ return (await get(KEY_REPORTS))||[]; },
     async getParts(){ return (await get(KEY_PARTS))||{}; },
     async setPart(id,date){ const p=(await get(KEY_PARTS))||{}; p[id]=date; await set(KEY_PARTS,p); },
+    async addTemp(r){ const a=(await get(KEY_TEMPS))||[]; a.push(r); await set(KEY_TEMPS,a); },
+    async getTemps(){ return (await get(KEY_TEMPS))||[]; },
+    watchTemps(date,cb){ get(KEY_TEMPS).then(a=>cb((a||[]).filter(x=>x.date===date))); return ()=>{}; },
     async devGet(k){ return await dget(k); },
     async devSet(k,v){ return await dset(k,v); }
   };
@@ -424,6 +464,10 @@ function firebaseAdapter(){
     async getReports(){ const q=await db.collection("reports").orderBy("ts","desc").get(); return q.docs.map(d=>d.data()); },
     async getParts(){ const d=await db.collection("meta").doc("parts").get(); return d.exists?d.data():{}; },
     async setPart(id,date){ await db.collection("meta").doc("parts").set({[id]:date},{merge:true}); },
+    async addTemp(r){ await db.collection("temps").add(r); },
+    async getTemps(){ const q=await db.collection("temps").orderBy("ts","desc").get(); return q.docs.map(d=>d.data()); },
+    watchTemps(date,cb){ return db.collection("temps").where("date","==",date)
+      .onSnapshot(s=>cb(s.docs.map(d=>d.data())), e=>console.warn("temps watch error",e)); },
     async devGet(k){ try{return localStorage.getItem("dev:"+k);}catch(e){return null;} },
     async devSet(k,v){ try{localStorage.setItem("dev:"+k,v);}catch(e){} }
   };
@@ -434,13 +478,15 @@ function firebaseAdapter(){
    ===================================================================== */
 const V=document.getElementById("view"), BACK=document.getElementById("backBtn");
 let staffName="";
+let _tempUnsub=null, tempDate="";
 
 function go(page,arg){
+  if(_tempUnsub){ try{_tempUnsub();}catch(e){} _tempUnsub=null; }
   BACK.style.display = page==="home" ? "none":"flex";
   window.scrollTo(0,0);
   ({home:renderHome,daily:()=>renderChecklist("daily"),weekly:()=>renderChecklist("weekly"),
     monthly:()=>renderChecklist("monthly"),fire:()=>renderChecklist("fire"),
-    parts:renderParts,manual:renderManual,records:renderRecords}[page]||renderHome)(arg);
+    parts:renderParts,manual:renderManual,temps:renderTemps,records:renderRecords}[page]||renderHome)(arg);
 }
 
 async function renderHome(){
@@ -454,7 +500,7 @@ async function renderHome(){
         return `<div class="tile${isAlert?' alert':''}" onclick="go('${t.id}')">
           ${isAlert?'<span class="dot"></span>':''}
           <span class="ico" style="color:${t.color}">${t.ico()}</span>
-          <div><div class="label">${t.label}</div><div class="meta">${isAlert?'交換時期 超過あり':t.meta}</div></div>
+          <div><div class="label">${t.label}</div><div class="meta">${isAlert?'期限 超過あり':t.meta}</div></div>
           <span class="wash"></span>
         </div>`;
       }).join("")}
@@ -530,34 +576,179 @@ async function submitCheck(type){
 /* ---- 消耗部品 ---- */
 async function renderParts(){
   const last=await DB.getParts();
+  const group=(title,items)=> items.length?`<div class="card"><h2>${title}</h2><div class="body">
+      ${items.map(p=>partRow(p,last[p.id]||"")).join("")}
+    </div></div>`:"";
   V.innerHTML=`
-    <div class="ptitle"><h1>消耗部品の交換アラート</h1><p>最終実施日を入れると次回目安と状態を自動表示</p></div>
-    <div class="wrap"><div class="card"><div class="body">
-      ${PARTS.map(p=>{ const d=last[p.id]||""; const st=partStatus(p,d);
-        return `<div class="part">
-          <div class="ph"><span class="pn">${p.n}</span><span class="badge ${st.k}">${st.label}</span></div>
-          <div class="pmeta">目安：${p.months>=12?(p.months/12)+"年":p.months+"か月"}毎　${d?'／ 次回目安 '+st.next:''}</div>
-          <div class="pmeta">${p.note}</div>
-          <div class="prow">
-            <input type="date" id="pd_${p.id}" value="${d}">
-            <button class="mini" onclick="savePart('${p.id}')">最終実施日を更新</button>
-            <button class="mini" onclick="setToday('${p.id}')">今日にする</button>
-          </div>
-        </div>`;}).join("")}
-    </div></div>
-    <div class="modebar">部品交換の履歴も「記録を見る」に残すと、消防の点検整備の証跡になります。</div>
+    <div class="ptitle"><h1>消耗品・設備点検</h1><p>最終実施日を入れると次回目安と状態を自動表示</p></div>
+    <div class="wrap">
+      ${group("消耗部品（交換）", PARTS.filter(p=>p.cat!=="check"))}
+      ${group("毎月の設備点検（確認日から1か月）", PARTS.filter(p=>p.cat==="check"))}
+      <div class="modebar">点検は「確認日から1か月」で再確認の合図。<b>期限を超過するとホームのタイルが点滅</b>します。記録は「記録を見る」にも残すと消防対応の証跡になります。</div>
     </div>`;
+}
+function partRow(p,d){
+  const st=partStatus(p,d);
+  return `<div class="part">
+    <div class="ph"><span class="pn">${p.n}</span><span class="badge ${st.k}">${st.label}</span></div>
+    <div class="pmeta">目安：${p.months>=12?(p.months/12)+"年":p.months+"か月"}毎　${d?'／ 次回目安 '+st.next:''}</div>
+    <div class="pmeta">${p.note}</div>
+    <div class="prow">
+      <input type="date" id="pd_${p.id}" value="${d}">
+      <button class="mini" onclick="savePart('${p.id}')">日付を更新</button>
+      <button class="mini" onclick="setToday('${p.id}')">今日 実施</button>
+    </div>
+  </div>`;
 }
 function partStatus(p,d){
   if(!d) return {k:"soon",label:"未設定",next:"-"};
   const next=new Date(d); next.setMonth(next.getMonth()+p.months);
   const ns=next.toISOString().slice(0,10); const diff=(next-new Date())/(86400000);
-  if(diff<0) return {k:"over",label:"交換時期 超過",next:ns};
-  if(diff<30) return {k:"soon",label:"まもなく",next:ns};
+  const warn=Math.min(30,Math.max(3,Math.round(p.months*4.5))); // 周期に比例（月次なら約5日前から）
+  if(diff<0) return {k:"over",label:"期限 超過",next:ns};
+  if(diff<warn) return {k:"soon",label:"まもなく",next:ns};
   return {k:"ok",label:"良好",next:ns};
 }
 async function savePart(id){ const v=document.getElementById("pd_"+id).value; if(!v){toast("日付を選んでください");return;} await DB.setPart(id,v); toast("更新しました"); renderParts(); }
 async function setToday(id){ await DB.setPart(id,dateStr()); toast("今日に更新しました"); renderParts(); }
+
+/* ---- 温度管理（自動スタンプ＋当日推移） ---- */
+function nowHHMM(){ const n=new Date(); return `${String(n.getHours()).padStart(2,"0")}:${String(n.getMinutes()).padStart(2,"0")}`; }
+function fmtTemp(t){ return (Math.round(t*10)/10).toString(); }
+
+async function renderTemps(){
+  staffName = staffName || (await DB.devGet("staff")) || "";
+  tempDate = dateStr();
+  V.innerHTML=`
+    <div class="ptitle"><h1>温度管理</h1><p>記録すると現在時刻を自動スタンプ。当日の推移をリアルタイムで共有</p></div>
+    <div class="wrap">
+      <div class="card"><h2>温度を記録</h2><div class="body">
+        <div class="field"><label>担当者名</label><input type="text" id="tstaff" placeholder="氏名（任意）" value="${esc(staffName)}"></div>
+        <div class="trow">
+          <div class="field"><label>温度（℃）</label><input type="number" id="ttemp" inputmode="decimal" step="0.1" placeholder="例 88"></div>
+          <div class="field"><label>利用人数（人）</label><input type="number" id="tpeople" inputmode="numeric" step="1" min="0" placeholder="例 12"></div>
+        </div>
+        <div class="tnow">記録時刻：<b id="tnow">${nowHHMM()}</b>（自動）　／　推奨は1時間おき・難しければ任意のタイミングで</div>
+        <button class="btn" style="margin-top:12px" onclick="saveTemp()">この時刻で記録する</button>
+      </div></div>
+
+      <div class="card"><h2 id="tchead">本日の推移</h2><div class="body">
+        <div class="tbig"><b id="tlatest">—</b><span id="tlatestsub"></span></div>
+        <div id="tchart"></div>
+      </div></div>
+
+      <div class="card"><h2>記録ログ</h2><div class="body">
+        <div class="tdate">
+          <label>表示日</label>
+          <input type="date" id="tdate" value="${tempDate}" max="${tempDate}" onchange="changeTempDate(this.value)">
+          <button class="mini" onclick="changeTempDate(dateStr())">今日</button>
+        </div>
+        <div id="tlist"></div>
+        <button class="btn ghost" onclick="exportTempCSV()">温度ログをCSVで書き出し</button>
+      </div></div>
+    </div>
+    <div class="modebar">保存先：<b>${modeLabel()}</b>　—　${MODE==='firebase'?'全端末でリアルタイム共有中':modeHint()}</div>`;
+  startTempClock();
+  reloadTemps();
+}
+function startTempClock(){
+  clearInterval(window._tclk);
+  window._tclk=setInterval(()=>{
+    const el=document.getElementById("tnow"); if(!el){ clearInterval(window._tclk); return; }
+    el.textContent=nowHHMM();
+  },15000);
+}
+function reloadTemps(){
+  if(_tempUnsub){ try{_tempUnsub();}catch(e){} _tempUnsub=null; }
+  const head=document.getElementById("tchead");
+  if(head) head.textContent = (tempDate===dateStr()? "本日" : tempDate.replaceAll("-","/")) + "の推移";
+  _tempUnsub = DB.watchTemps(tempDate, drawTemps);
+}
+function changeTempDate(v){ tempDate=v||dateStr(); const di=document.getElementById("tdate"); if(di) di.value=tempDate; reloadTemps(); }
+
+async function saveTemp(){
+  const tEl=document.getElementById("ttemp"), pEl=document.getElementById("tpeople"), sEl=document.getElementById("tstaff");
+  const temp=parseFloat(tEl.value);
+  if(isNaN(temp)){ toast("温度を入力してください"); tEl.focus(); return; }
+  const people = pEl.value===""? null : parseInt(pEl.value,10);
+  const staff=(sEl.value||"").trim(); if(staff){ staffName=staff; await DB.devSet("staff",staff); }
+  const now=new Date();
+  const rec={ ts:now.getTime(), date:dateStr(), time:nowHHMM(), temp,
+    people:(people==null||isNaN(people))?null:people, staff:staff||"-" };
+  try{
+    await DB.addTemp(rec);
+    tEl.value=""; pEl.value="";
+    toast("記録しました ✓");
+    if(tempDate!==dateStr()){ tempDate=dateStr(); const di=document.getElementById("tdate"); if(di) di.value=tempDate; }
+    reloadTemps();
+  }catch(e){ toast("保存に失敗しました"); console.error(e); }
+}
+
+function drawTemps(data){
+  const a=(data||[]).slice().sort((x,y)=>x.ts-y.ts);
+  const chart=document.getElementById("tchart"), list=document.getElementById("tlist"),
+        latest=document.getElementById("tlatest"), lsub=document.getElementById("tlatestsub");
+  if(!chart) return;
+  if(!a.length){
+    chart.innerHTML=`<div class="empty">${icoTemp()}<div>この日の記録はまだありません。<br>温度を入力して「記録する」を押してください。</div></div>`;
+    if(list) list.innerHTML=""; if(latest) latest.textContent="—"; if(lsub) lsub.textContent="";
+    return;
+  }
+  const last=a[a.length-1];
+  const peeps=a.filter(r=>r.people!=null);
+  const maxP=peeps.length?Math.max(...peeps.map(r=>r.people)):0;
+  if(latest) latest.textContent=`${fmtTemp(last.temp)}℃`;
+  if(lsub) lsub.textContent=`最新 ${last.time}${last.people!=null?` ・ ${last.people}人`:""}　/　計${a.length}回${maxP?` ・ 最多 ${maxP}人`:""}`;
+  chart.innerHTML=tempChartSVG(a);
+  if(list) list.innerHTML=a.slice().reverse().map(r=>`
+    <div class="tlog">
+      <span class="tm">${r.time}</span>
+      <span class="tv">${fmtTemp(r.temp)}℃</span>
+      <span class="pp">${r.people!=null?r.people+"人":"—"}${(r.staff&&r.staff!=="-")?` <span class="who2">/ ${esc(r.staff)}</span>`:""}</span>
+    </div>`).join("");
+}
+
+function tempChartSVG(a){
+  const W=340,H=184, padL=30,padR=12,padT=16,padB=30;
+  const plotW=W-padL-padR, plotH=H-padT-padB;
+  const temps=a.map(r=>r.temp);
+  let lo=Math.min(...temps), hi=Math.max(...temps);
+  if(lo===hi){ lo-=5; hi+=5; }
+  lo=Math.floor((lo-2)/5)*5; hi=Math.ceil((hi+2)/5)*5;
+  const span=(hi-lo)||10;
+  const mins=r=>{ const p=(r.time||"0:0").split(":"); return (+p[0])*60+(+p[1]); };
+  let xmin=Math.min(...a.map(mins)), xmax=Math.max(...a.map(mins));
+  if(xmin===xmax){ xmin-=30; xmax+=30; }
+  const X=r=> padL + ((mins(r)-xmin)/(xmax-xmin))*plotW;
+  const Y=t=> padT + (1-(t-lo)/span)*plotH;
+  let grid="";
+  for(let i=0;i<=4;i++){
+    const val=lo+span*i/4, y=padT+(1-i/4)*plotH;
+    grid+=`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="#D5E9F1" stroke-width="1"/>`;
+    grid+=`<text x="${padL-4}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="9" fill="#5A7681">${Math.round(val)}</text>`;
+  }
+  const pts=a.map(r=>`${X(r).toFixed(1)},${Y(r.temp).toFixed(1)}`).join(" ");
+  const line=a.length>1?`<polyline points="${pts}" fill="none" stroke="#3FAFD4" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`:"";
+  const dots=a.map(r=>{ const x=X(r),y=Y(r.temp);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.2" fill="#fff" stroke="#1C6E8C" stroke-width="2"/>`
+      +`<text x="${x.toFixed(1)}" y="${(y-7).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#1C6E8C">${fmtTemp(r.temp)}</text>`;
+  }).join("");
+  const xlab=r=>`<text x="${X(r).toFixed(1)}" y="${H-padB+15}" text-anchor="middle" font-size="9" fill="#5A7681">${r.time}</text>`;
+  let labels=xlab(a[0]);
+  if(a.length>1) labels+=xlab(a[a.length-1]);
+  if(a.length>2) labels+=xlab(a[Math.floor((a.length-1)/2)]);
+  return `<svg class="tchart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="温度推移グラフ">${grid}${line}${dots}${labels}</svg>`;
+}
+
+async function exportTempCSV(){
+  const all=(await DB.getTemps()).slice().sort((a,b)=>a.ts-b.ts);
+  if(!all.length){ toast("記録がありません"); return; }
+  const rows=[["日付","時刻","温度(℃)","利用人数","担当"]];
+  all.forEach(r=>rows.push([r.date,r.time,fmtTemp(r.temp),r.people==null?"":r.people,r.staff||""]));
+  const csv="﻿"+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download=`LOGサウナ温度ログ_${dateStr()}.csv`; a.click();
+}
 
 /* ---- 業務マニュアル ---- */
 function renderManual(){
