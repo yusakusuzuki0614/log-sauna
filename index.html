@@ -5,9 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="LOGサウナ点検">
+<meta name="apple-mobile-web-app-title" content="SAUNA LOG">
 <meta name="theme-color" content="#ffffff">
-<title>LOG サウナストーブ 点検・日報</title>
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>SAUNA LOG ｜ サウナ点検・温度・設備</title>
 <style>
   :root{
     --bg:#ffffff;
@@ -44,6 +47,7 @@
   .brand{display:flex;align-items:baseline;gap:8px;font-weight:800;letter-spacing:.02em}
   .brand .log{color:var(--water-deep);font-size:20px}
   .brand .sub{color:var(--ink-sub);font-size:12px;font-weight:600}
+  .poolmark{height:22px;width:auto;display:block;flex:0 0 auto;opacity:.9}
   .back{appearance:none;border:none;background:var(--water-soft);color:var(--water-deep);
     font-weight:700;border-radius:12px;padding:8px 12px;font-size:14px;display:flex;align-items:center;gap:6px;cursor:pointer}
   .spacer{flex:1}
@@ -202,6 +206,7 @@
       </button>
       <div class="brand"><span class="log">LOG</span><span class="sub">サウナストーブ点検・日報</span></div>
       <div class="spacer"></div>
+      <img class="poolmark" src="assets/pool-wordmark.png" alt="POOL" />
     </div>
     <svg class="contour" viewBox="0 0 680 8" preserveAspectRatio="none" aria-hidden="true">
       <path d="M0 5 Q60 1 120 5 T240 5 T360 5 T480 5 T600 5 T720 5" fill="none" stroke="#3FAFD4" stroke-width="1.4" opacity=".5"/>
@@ -215,7 +220,7 @@
 <script>
 /* =========================================================================
    LOG サウナストーブ 点検・日報アプリ
-   対象機：HARVIA Legend 240（薪／業務用・サ室23m³）
+   対象機：HARVIA Legend 300（薪／業務用・サ室23m³）
    設置：大玉村（安達地方広域行政組合消防本部 管轄）
 
    ▼ データ保存先（全端末で1か所に集約する心臓部）— 環境を自動判定 ▼
@@ -428,8 +433,9 @@ function showLogin(auth){
   o.id="loginOverlay";
   o.style.cssText="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px";
   o.innerHTML=`
-    <div style="width:100%;max-width:360px;background:#fff;border:1px solid var(--water-line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px">
-      <div style="font-size:20px;font-weight:800;color:var(--water-deep)">LOG サウナ点検</div>
+    <div style="width:100%;max-width:360px;background:#fff;border:1px solid var(--water-line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px;text-align:center">
+      <img src="assets/login-mushroom.png" alt="LOG" style="display:block;width:200px;max-width:78%;margin:2px auto 14px" />
+      <div style="font-size:20px;font-weight:800;color:var(--water-deep)">SAUNA LOG</div>
       <div style="font-size:13px;color:var(--ink-sub);margin:6px 0 18px">スタッフ用パスワードを入力してください</div>
       <input id="loginPw" type="password" inputmode="text" autocomplete="current-password" placeholder="パスワード"
         style="width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid var(--water-line);border-radius:12px;background:#fff;color:var(--ink);font-size:16px;outline:none">
@@ -493,7 +499,7 @@ async function renderHome(){
   const parts=await DB.getParts();
   const overdue=PARTS.some(p=>partStatus(p,parts[p.id]).k==="over");
   V.innerHTML=`
-    <div class="ptitle"><h1>きょうの点検</h1><p>${todayLabel()}　/　HARVIA Legend 240（薪・23m³）</p></div>
+    <div class="ptitle"><h1>SAUNA LOG</h1><p>${todayLabel()}　/　HARVIA Legend 300（薪・23m³）</p></div>
     <div class="grid">
       ${TILES.map(t=>{
         const isAlert = t.id==="parts" && overdue;
@@ -753,7 +759,7 @@ async function exportTempCSV(){
 /* ---- 業務マニュアル ---- */
 function renderManual(){
   V.innerHTML=`
-  <div class="ptitle"><h1>業務マニュアル</h1><p>HARVIA Legend 240（薪）・LOG サウナ運用</p></div>
+  <div class="ptitle"><h1>業務マニュアル</h1><p>HARVIA Legend 300（薪）・LOG サウナ運用</p></div>
   <div class="wrap mtext">
     <div class="card"><h2>1. 運転前の準備</h2><div class="body">
       <ul>
@@ -845,7 +851,7 @@ function todayLabel(){ const d=new Date(); const w="日月火水木金土"[d.get
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function strip(s){ return s.replace(/<[^>]+>/g,""); }
 function modeLabel(){ return {claude:"プレビュー共有", firebase:"Firebase（全端末共有）", local:"この端末のみ（ローカル）", memory:"一時メモリ（未保存）"}[MODE]; }
-function modeHint(){ return {claude:"このプレビューで動作確認できます", firebase:"本番運用OK", local:"Firebase設定で全端末共有に切替", memory:"設定が必要です"}[MODE]; }
+function modeHint(){ return {claude:"このプレビューで動作確認できます", firebase:"火の用心", local:"Firebase設定で全端末共有に切替", memory:"設定が必要です"}[MODE]; }
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2200); }
 
 /* boot */
